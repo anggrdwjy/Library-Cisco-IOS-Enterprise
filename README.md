@@ -1,4 +1,4 @@
-# Cisco IOS Classic — Implementation & Operations Guide
+# Cisco IOS — Implementation & Operations Guide
 ### Enterprise Routing & Switching
 
 | Item | Detail |
@@ -13,8 +13,6 @@
 
 > Batasan IOS Classic: Tanpa Segment Routing. EVPN terbatas. MPLS hanya pada platform yang mendukung. Verifikasi setiap fitur di Feature Navigator untuk citra yang persis sama.
 
----
-
 ## Daftar Isi
 
 - Bagian I — Fondasi: Bab 1-4
@@ -22,8 +20,6 @@
 - Bagian III — Implementasi: Bab 16-18
 - Bagian IV — Operasi: Bab 19-21
 - Appendix A-E, N (Golden Config RR), Studi Kasus A-D
-
----
 
 ## Bagian I — Fondasi
 
@@ -81,8 +77,6 @@ interface GigabitEthernet<SLOT>/<PORT>
 
 **Verifikasi:** `show spanning-tree vlan <VLAN-ID> brief` | `show interfaces status`
 **Risiko:** Port access tanpa BPDU Guard menerima BPDU liar dan mengubah root.
-
----
 
 ## Bagian II — Desain Inti
 
@@ -381,8 +375,6 @@ ip domain-name <DOMAIN>
 **Prinsip:** Filter selalu di PE. CE yang salah konfigurasi tidak boleh membanjiri VRF.
 **Verifikasi:** `show ip bgp vpnv4 vrf <VRF-NAMA> neighbors` | `show ip route vrf <VRF-NAMA>`
 
----
-
 ## Bagian III — Implementasi
 
 ### Bab 16: Implementasi P dan PE
@@ -407,8 +399,6 @@ ip domain-name <DOMAIN>
 **Urutan:** OSPF FULL > label terbentuk > rute VPNv4 > rute di VRF > ping VRF + MTU > failover P/PE/gateway.
 **Cek:** `show ip ospf neighbor` | `show mpls forwarding-table` | `show ip bgp vpnv4 vrf <VRF-NAMA>` | `ping vrf <VRF-NAMA> <CE-LOOPBACK> size <MTU-TEST> df-bit` | `traceroute vrf <VRF-NAMA> <CE-LOOPBACK>`
 **Jangan:** Ping tanpa `vrf`. Tanpa uji MTU, isolasi, failover.
-
----
 
 ## Bagian IV — Operasi
 
@@ -440,8 +430,6 @@ ip domain-name <DOMAIN>
 
 **Lifecycle:** `show version` | `show inventory` | `show license feature` | `show archive config`. Pembaruan citra diverifikasi di Feature Navigator untuk citra yang persis sama.
 **Jangan:** Ubah tanpa `reload in`. Backup tidak pernah diuji. Update citra tanpa cek fitur.
-
----
 
 ## Appendix
 
@@ -1031,9 +1019,7 @@ archive
 | 4. ATM | VRF ATM terisolasi, uji isolasi dan transaksi |
 | 5. Operasi | Hardening, NTP, CoPP, QoS, arsip, uji failover berkala |
 
-
-
- Parameter class-map
+Parameter class-map
 
 **Sintaks Dasar:**
 
