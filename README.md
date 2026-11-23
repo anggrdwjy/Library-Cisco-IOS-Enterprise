@@ -7,11 +7,11 @@
 | Fokus | OSPF, BGP, MPLS L3VPN Dasar, VRF Lite, QoS, Security |
 | Topologi Referensi | 2 P, 3 PE, 2 RR, 6 CE |
 | Klasifikasi | PUBLIC-SAFE — Semua nilai produksi diganti placeholder `<...>` |
-| Sintaks | IOS Classic. Tidak ada `commit`. Konfigurasi aktif langsung. |
+| Sintaks | IOS  . Tidak ada `commit`. Konfigurasi aktif langsung. |
 | Pengaman Wajib | `reload in <MENIT>` + `archive config` + `copy running-config startup-config` |
 | Sumber Nilai Produksi | Vault / dokumen desain |
 
-> Batasan IOS Classic: Tanpa Segment Routing. EVPN terbatas. MPLS hanya pada platform yang mendukung. Verifikasi setiap fitur di Feature Navigator untuk citra yang persis sama.
+> Batasan IOS  : Tanpa Segment Routing. EVPN terbatas. MPLS hanya pada platform yang mendukung. Verifikasi setiap fitur di Feature Navigator untuk citra yang persis sama.
 
 ## Daftar Isi
 
@@ -521,7 +521,7 @@ logging host <SYSLOG-SERVER>
 
 **Prinsip:** Akses console adalah jalan terakhir. Prosedur harus diuji sebelum insiden, bukan saat insiden.
 
-**Password Recovery — IOS Classic:**
+**Password Recovery — IOS  :**
 
 ```
 1. Console, reboot, kirim Break saat boot
@@ -1028,7 +1028,7 @@ class-map [match-all | match-any] <CLASS-NAMA>
  match <PARAMETER>
 ```
 
-**Prinsip:** `match-all` = semua kondisi harus terpenuhi (AND). `match-any` = satu kondisi terpenuhi sudah cukup (OR). Default IOS Classic adalah `match-all` jika tidak ditulis.
+**Prinsip:** `match-all` = semua kondisi harus terpenuhi (AND). `match-any` = satu kondisi terpenuhi sudah cukup (OR). Default IOS   adalah `match-all` jika tidak ditulis.
 
 | Parameter | Sintaks | Fungsi | Contoh | Catatan |
 | --- | --- | --- | --- | --- |
