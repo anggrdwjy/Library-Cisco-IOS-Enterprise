@@ -1129,8 +1129,4 @@ class-map [match-all | match-any] <CLASS-NAMA>
 **Kesalahan Umum:** Lupa ganti Loopback RR2 sehingga router-id duplikat. `cluster-id` beda. `route-reflector-client` tertinggal di satu PE. Password BGP tidak sama dengan PE.
 
 
-### Appendix K: Referensi
-
-Dokumentasi resmi Cisco untuk platform dan citra yang digunakan. Dokumen desain dan vault untuk nilai produksi.
-
 
