@@ -79,8 +79,6 @@ interface GigabitEthernet<SLOT>/<PORT>
 **Verifikasi:** `show spanning-tree vlan <VLAN-ID> brief` | `show interfaces status`
 **Risiko:** Port access tanpa BPDU Guard menerima BPDU liar dan mengubah root.
 
-## Bagian II — Desain Inti
-
 ### Modul 5: IP Addressing
 
 **Prinsip:** Loopback adalah identitas routing. Link adalah transit, bukan identitas.
@@ -376,8 +374,6 @@ ip domain-name <DOMAIN>
 **Prinsip:** Filter selalu di PE. CE yang salah konfigurasi tidak boleh membanjiri VRF.
 **Verifikasi:** `show ip bgp vpnv4 vrf <VRF-NAMA> neighbors` | `show ip route vrf <VRF-NAMA>`
 
-## Bagian III — Implementasi
-
 ### Modul 16: Implementasi P dan PE
 
 **Prinsip:** P stabil dulu, baru PE bawa layanan. P tidak simpan rute VPN.
@@ -431,8 +427,6 @@ ip domain-name <DOMAIN>
 
 **Lifecycle:** `show version` | `show inventory` | `show license feature` | `show archive config`. Pembaruan citra diverifikasi di Feature Navigator untuk citra yang persis sama.
 **Jangan:** Ubah tanpa `reload in`. Backup tidak pernah diuji. Update citra tanpa cek fitur.
-
-## Appendix
 
 ### Appendix A: Perintah Verifikasi Inti
 
