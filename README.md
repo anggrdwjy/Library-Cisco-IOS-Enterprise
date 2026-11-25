@@ -59,7 +59,7 @@ login block-for <DETIK> attempts <JUMLAH> within <DETIK>
 ```
 
 **Verifikasi:** `show ip ssh` | `show access-lists` | `show login`
-**Risiko:** VTY tanpa ACL dan tanpa `reload in` menyeModulkan lockout tanpa rollback.
+**Risiko:** VTY tanpa ACL dan tanpa `reload in` menyebabkan lockout tanpa rollback.
 
 ### Modul 4: Layer 2 dan STP
 
@@ -345,7 +345,7 @@ standby <GROUP> preempt
 ```
 
 **Verifikasi:** `show standby brief` | `show bfd neighbors` | `show ip ospf neighbor`
-**Risiko:** Timer BFD terlalu agresif pada link tidak stabil menyeModulkan flapping.
+**Risiko:** Timer BFD terlalu agresif pada link tidak stabil menyebabkan flapping.
 
 ### Modul 14: NTP, DNS, DHCP, NAT
 
@@ -471,8 +471,6 @@ Verifikasi di Feature Navigator sebelum desain final. MPLS, QoS lanjutan, dan fi
 ### Appendix F: Template Baseline Golden Config
 
 **Prinsip:** Satu baseline per peran. Semua perangkat mulai dari baseline yang sama, ditambah konfigurasi peran.
-
-**Baseline Umum — Semua Peran:** Gabungan dari Modul yang sudah ada, bukan konfig baru. Jangan salin ulang dari sini jika sudah terapkan Modul terkait.
 
 | Komponen | Sumber Tunggal |
 | --- | --- |
