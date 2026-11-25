@@ -1,17 +1,4 @@
 # Cisco IOS — Implementation & Operations Guide
-### Enterprise Routing & Switching
-
-| Item | Detail |
-| --- | --- |
-| Platform | Catalyst 2960-X, 3560-X, 3750-X, 3850, ISR 2900, ISR 4000 (4321 / 4331 / 4351), WS-C2960, WS-C3560 |
-| Fokus | OSPF, BGP, MPLS L3VPN Dasar, VRF Lite, QoS, Security |
-| Topologi Referensi | 2 P, 3 PE, 2 RR, 6 CE |
-| Klasifikasi | PUBLIC-SAFE — Semua nilai produksi diganti placeholder `<...>` |
-| Sintaks | IOS  . Tidak ada `commit`. Konfigurasi aktif langsung. |
-| Pengaman Wajib | `reload in <MENIT>` + `archive config` + `copy running-config startup-config` |
-| Sumber Nilai Produksi | Vault / dokumen desain |
-
-> Batasan IOS  : Tanpa Segment Routing. EVPN terbatas. MPLS hanya pada platform yang mendukung. Verifikasi setiap fitur di Feature Navigator untuk citra yang persis sama.
 
 ## Daftar Isi
 
@@ -42,7 +29,7 @@
 
 ### Bab 3: Hardening Dasar
 
-**Prinsip:** Akses manajemen adalah permukaan serangan utama.
+**Prinsip:** Akses manajemen merupakan permukaan serangan utama.
 **Konfigurasi Inti:**
 
 ```
@@ -58,7 +45,7 @@ login block-for <DETIK> attempts <JUMLAH> within <DETIK>
 ```
 
 **Verifikasi:** `show ip ssh` | `show access-lists` | `show login`
-**Risiko:** VTY tanpa ACL dan tanpa `reload in` menyebabkan lockout tanpa rollback.
+**Risiko:** VTY tanpa ACL dan tanpa `reload in` menyebabkan kondisi terkunci tanpa mekanisme pengembalian.
 
 ### Bab 4: Layer 2 dan STP
 
@@ -76,19 +63,19 @@ interface GigabitEthernet<SLOT>/<PORT>
 ```
 
 **Verifikasi:** `show spanning-tree vlan <VLAN-ID> brief` | `show interfaces status`
-**Risiko:** Port access tanpa BPDU Guard menerima BPDU liar dan mengubah root.
+**Risiko:** Port access tanpa BPDU Guard menerima BPDU tidak sah dan mengubah root.
 
 ## Bagian II — Desain Inti
 
 ### Bab 5: IP Addressing
 
-**Prinsip:** Loopback adalah identitas routing. Link adalah transit, bukan identitas.
-**Standar:** Loopback0 `/32` untuk router-id OSPF, BGP, dan LDP. Link point-to-point `/30` atau `/31`. Blok per site terdokumentasi, tidak tumpang tindih.
+**Prinsip:** Loopback merupakan identitas routing. Tautan merupakan transit, bukan identitas.
+**Standar:** Loopback0 `/32` untuk router-id OSPF, BGP, dan LDP. Tautan point-to-point `/30` atau `/31`. Blok per situs terdokumentasi, tidak tumpang tindih.
 **Verifikasi:** `show ip interface brief` | `show ip route connected`
 
 ### Bab 6: OSPF
 
-**Prinsip:** OSPF hanya untuk core. CE tidak masuk area 0 core.
+**Prinsip:** OSPF hanya untuk core. CE tidak termasuk dalam area 0 core.
 **Konfigurasi Inti:**
 
 ```
@@ -101,12 +88,12 @@ router ospf <PROCESS>
 ```
 
 **Verifikasi:** `show ip ospf neighbor` | `show ip ospf interface brief`
-**Risiko:** Router-id duplikat, autentikasi tidak cocok, `passive-interface` pada link core.
+**Risiko:** Router-id ganda, autentikasi tidak cocok, `passive-interface` pada tautan core.
 
 ### Bab 7: BGP dan Route Reflector
 
-**Prinsip:** Skalabilitas melalui hierarki. PE hanya peer ke RR, bukan full-mesh. RR hanya refleksi rute, tidak forwarding trafik pelanggan, tidak punya VRF pelanggan.
-**Kapan Dipakai:** Wajib jika PE > 2. Tanpa RR, PE harus full-mesh iBGP VPNv4. Dengan 2 RR, satu RR down tidak menghentikan refleksi.
+**Prinsip:** Skalabilitas melalui hierarki. PE hanya peer ke RR, bukan full-mesh. RR hanya melakukan refleksi rute, tidak meneruskan lalu lintas pelanggan, tidak memiliki VRF pelanggan.
+**Kondisi Penggunaan:** Wajib jika PE > 2. Tanpa RR, PE wajib full-mesh iBGP VPNv4. Dengan dua RR, satu RR yang tidak aktif tidak menghentikan refleksi.
 **Desain RR di Panduan Ini:** 2 RR, `cluster-id` sama untuk keduanya agar PE melihat satu cluster yang redundan. RR1 dan RR2 peer satu sama lain. RR tidak `next-hop-self` agar next-hop PE asal dipertahankan.
 
 **Konfigurasi Inti — PE (ke 2 RR):**
@@ -133,7 +120,7 @@ router bgp <BGP-AS>
  exit-address-family
 ```
 
-**Konfigurasi Inti — RR1 (RR2 identik, ganti Loopback dan hostname):**
+**Konfigurasi Inti — RR1 (RR2 identik, dengan perbedaan pada Loopback dan hostname):**
 
 ```
 hostname <RR1-HOSTNAME>
@@ -212,13 +199,13 @@ router bgp <BGP-AS>
 
 | Blok | Fungsi | Jika Salah |
 | --- | --- | --- |
-| `no bgp default ipv4-unicast` | RR hanya aktifkan VPNv4 secara eksplisit, tidak bawa IPv4 unicast | RR tanpa sengaja jadi transit IPv4 |
-| `bgp cluster-id <CLUSTER-ID>` | Sama di RR1 dan RR2, satu cluster redundan | Cluster-id beda membuat loop proteksi gagal, rute duplikat |
-| `route-reflector-client` di VPNv4 | Tandai PE sebagai client, agar RR refleksikan rute antar client | Tanpa ini, RR tidak refleksikan rute PE ke PE lain |
-| `send-community extended` | Kirim RT via extended community | RT hilang, VRF tidak terima rute |
-| `update-source Loopback0` | Sesi BGP via Loopback, tahan satu link down | Sesi down saat link fisik down |
-| Tanpa `next-hop-self` di RR | Next-hop PE asal dipertahankan, LSP end-to-end utuh | `next-hop-self` di RR memutus LSP, trafik blackhole |
-| Tanpa VRF di RR | RR tidak forwarding pelanggan, hanya kontrol | VRF di RR membebani RR dan merusak desain |
+| `no bgp default ipv4-unicast` | RR hanya mengaktifkan VPNv4 secara eksplisit, tidak membawa IPv4 unicast | RR tanpa sengaja menjadi transit IPv4 |
+| `bgp cluster-id <CLUSTER-ID>` | Sama pada RR1 dan RR2, satu klaster redundan | Cluster-id yang berbeda menyebabkan proteksi loop gagal dan rute menjadi ganda |
+| `route-reflector-client` di VPNv4 | Menandai PE sebagai client, agar RR merefleksikan rute antar client | Tanpa konfigurasi ini, RR tidak merefleksikan rute PE ke PE lain |
+| `send-community extended` | Mengirim RT melalui extended community | RT hilang, VRF tidak menerima rute |
+| `update-source Loopback0` | Sesi BGP melalui Loopback, tetap bertahan saat satu tautan terputus | Sesi terputus saat tautan fisik terputus |
+| Tanpa `next-hop-self` pada RR | Next-hop PE asal dipertahankan, LSP ujung ke ujung tetap utuh | `next-hop-self` pada RR memutus LSP sehingga lalu lintas terbuang |
+| Tanpa VRF pada RR | RR tidak meneruskan lalu lintas pelanggan, hanya melakukan kontrol | VRF pada RR membebani RR dan merusak desain |
 
 **Verifikasi — RR:**
 
@@ -233,11 +220,11 @@ show ip route <PE-LOOPBACK>
 ```
 
 **Verifikasi — PE (rute dari RR):** `show ip bgp vpnv4 all summary` | `show ip bgp vpnv4 vrf <VRF-NAMA> | include <PREFIX-CE>`
-**Risiko / Kesalahan Umum:** Tanpa `send-community extended`, RT tidak terkirim. Tanpa `update-source Loopback0`, sesi bergantung pada satu link. `cluster-id` beda di RR1/RR2. RR dikonfig `next-hop-self`. RR diberi VRF pelanggan. RR tidak masuk OSPF Area 0 atau LDP down sehingga Loopback PE tidak reachable. `route-reflector-client` hanya di `address-family ipv4` bukan `vpnv4`.
+**Risiko / Kesalahan Umum:** Tanpa `send-community extended`, RT tidak terkirim. Tanpa `update-source Loopback0`, sesi bergantung pada satu tautan. `cluster-id` berbeda pada RR1/RR2. RR dikonfigurasi dengan `next-hop-self`. RR diberi VRF pelanggan. RR tidak termasuk dalam OSPF Area 0 atau LDP tidak aktif sehingga Loopback PE tidak terjangkau. `route-reflector-client` hanya pada `address-family ipv4`, bukan `vpnv4`.
 
 ### Bab 8: MPLS dan LDP
 
-**Prinsip:** Tanpa label, tidak ada forwarding MPLS.
+**Prinsip:** Tanpa label, tidak terdapat penerusan MPLS.
 **Konfigurasi Inti:**
 
 ```
@@ -251,11 +238,11 @@ interface GigabitEthernet<SLOT>/<PORT>
 ```
 
 **Verifikasi:** `show mpls ldp neighbor` | `show mpls forwarding-table`
-**Risiko:** CEF nonaktif, MPLS hanya global, MTU tidak sama pada kedua ujung.
+**Risiko:** CEF tidak aktif, MPLS hanya global, MTU tidak sama pada kedua ujung.
 
 ### Bab 9: MPLS L3VPN dan VRF
 
-**Prinsip:** Isolasi melalui VRF dan RT. Rute hanya masuk VRF jika RT cocok.
+**Prinsip:** Isolasi melalui VRF dan RT. Rute hanya masuk ke VRF jika RT cocok.
 **Konfigurasi Inti:**
 
 ```
@@ -269,27 +256,27 @@ interface GigabitEthernet<SLOT>/<PORT>
 ```
 
 **Verifikasi:** `show ip vrf` | `show ip route vrf <VRF-NAMA>` | `ping vrf <VRF-NAMA> <CE-LOOPBACK>`
-**Risiko:** IP diisi sebelum `ip vrf forwarding` hilang. RT tidak cocok membuat rute ada di BGP, tidak di VRF.
+**Risiko:** IP diisi sebelum `ip vrf forwarding` hilang. RT yang tidak cocok menyebabkan rute terdapat pada BGP, tetapi tidak pada VRF.
 
 ### Bab 10: VRF Lite
 
-**Prinsip:** Isolasi tanpa MPLS, pada satu perangkat atau antar perangkat campus.
-**Kapan Dipakai:** Campus multi-building tanpa core MPLS. Bukan pengganti MPLS L3VPN antar site.
-**Konfigurasi Inti:** Sama seperti Bab 9, tanpa MPLS dan BGP VPNv4. Routing antar VRF hanya melalui firewall atau route leaking yang disetujui.
+**Prinsip:** Isolasi tanpa MPLS, pada satu perangkat atau antar perangkat kampus.
+**Kondisi Penggunaan:** Kampus multi-gedung tanpa core MPLS. Bukan pengganti MPLS L3VPN antar situs.
+**Konfigurasi Inti:** Sama seperti Bab 9, tanpa MPLS dan BGP VPNv4. Routing antar VRF hanya melalui firewall atau route leaking yang telah disetujui.
 **Verifikasi:** `show ip vrf interfaces` | `show ip route vrf <VRF-NAMA>`
-**Risiko:** Leaking tanpa kontrol merusak isolasi.
+**Risiko:** Route leaking tanpa kontrol merusak isolasi.
 
 ### Bab 11: QoS
 
-**Prinsip:** QoS adalah alokasi kelangkaan, bukan penambah bandwidth.
+**Prinsip:** QoS merupakan alokasi kelangkaan, bukan penambah lebar pita.
 **Standar:**
 
 | Class | Perlakuan |
 | --- | --- |
 | Voice | `priority`, policing ketat, antrian terpisah |
-| Video | Bandwidth terjamin, drop precedence |
-| Data kritis | Bandwidth minimum |
-| Default | Sisa bandwidth, WRED jika didukung |
+| Video | Lebar pita terjamin, prioritas pengguguran |
+| Data kritis | Lebar pita minimum |
+| Default | Sisa lebar pita, WRED jika didukung |
 
 **Konfigurasi Inti:**
 
@@ -306,11 +293,11 @@ interface GigabitEthernet<SLOT>/<PORT>
 ```
 
 **Verifikasi:** `show policy-map interface GigabitEthernet<SLOT>/<PORT>`
-**Risiko:** Priority tanpa policing membuat voice menekan trafik lain. Marking tidak konsisten di ingress merusak klasifikasi di egress.
+**Risiko:** Priority tanpa policing menyebabkan voice menekan lalu lintas lain. Penandaan yang tidak konsisten pada ingress merusak klasifikasi pada egress.
 
 ### Bab 12: Keamanan Control Plane dan Data Plane
 
-**Prinsip:** Control plane dilindungi agar routing tetap hidup saat serangan atau storm.
+**Prinsip:** Control plane dilindungi agar routing tetap beroperasi saat serangan atau lonjakan lalu lintas.
 **Konfigurasi Inti:**
 
 ```
@@ -329,12 +316,12 @@ control-plane
 ```
 
 **Verifikasi:** `show policy-map control-plane` | `show access-lists`
-**Risiko:** CoPP terlalu ketat menjatuhkan adjacency. Terlalu longgar tidak melindungi CPU.
+**Risiko:** CoPP yang terlalu ketat menjatuhkan adjacency. CoPP yang terlalu longgar tidak melindungi CPU.
 
-### Bab 13: High Availability dan Fast Convergence
+### Bab 13: Ketersediaan Tinggi dan Konvergensi Cepat
 
-**Prinsip:** Redundansi tanpa pengujian failover bukan redundansi.
-**Standar:** Dual P, dual PE per site kritis, dual RR, HSRP/VRRP pada gateway, BFD pada link core dan PE-CE kritis.
+**Prinsip:** Redundansi tanpa pengujian pengalihan otomatis bukan merupakan redundansi.
+**Standar:** Ganda P, ganda PE per situs kritis, ganda RR, HSRP/VRRP pada gateway, BFD pada tautan core dan PE-CE kritis.
 **Konfigurasi Inti:**
 
 ```
@@ -346,11 +333,11 @@ standby <GROUP> preempt
 ```
 
 **Verifikasi:** `show standby brief` | `show bfd neighbors` | `show ip ospf neighbor`
-**Risiko:** Timer BFD terlalu agresif pada link tidak stabil menyebabkan flapping.
+**Risiko:** Timer BFD yang terlalu agresif pada tautan tidak stabil menyebabkan ketidakstabilan status naik-turun berulang.
 
 ### Bab 14: NTP, DNS, DHCP, NAT
 
-**Prinsip:** Log tanpa waktu sinkron tidak dapat dikorelasikan. NTP adalah prasyarat operasi, bukan pelengkap.
+**Prinsip:** Log tanpa waktu sinkron tidak dapat dikorelasikan. NTP merupakan prasyarat operasi, bukan pelengkap.
 **Konfigurasi Inti:**
 
 ```
@@ -362,63 +349,63 @@ ip domain-name <DOMAIN>
 ```
 
 **Verifikasi:** `show ntp status` | `show ntp associations`
-**Risiko:** Satu NTP server, NTP tanpa autentikasi, DHCP tanpa snooping di access.
+**Risiko:** Satu server NTP, NTP tanpa autentikasi, DHCP tanpa snooping pada access.
 
 ### Bab 15: Interkoneksi CE
 
-| Model | Kapan Dipakai | Protokol |
+| Model | Kondisi Penggunaan | Protokol |
 | --- | --- | --- |
 | eBGP | CE dinamis, banyak prefix | BGP |
 | OSPF | CE sudah OSPF | OSPF area terpisah |
 | Static | CE satu jalur | Static route |
 
-**Prinsip:** Filter selalu di PE. CE yang salah konfigurasi tidak boleh membanjiri VRF.
+**Prinsip:** Filter selalu diterapkan pada PE. CE yang salah konfigurasi tidak diperbolehkan membebani VRF secara berlebihan.
 **Verifikasi:** `show ip bgp vpnv4 vrf <VRF-NAMA> neighbors` | `show ip route vrf <VRF-NAMA>`
 
 ## Bagian III — Implementasi
 
 ### Bab 16: Implementasi P dan PE
 
-**Prinsip:** P stabil dulu, baru PE bawa layanan. P tidak simpan rute VPN.
+**Prinsip:** P distabilkan terlebih dahulu, kemudian PE membawa layanan. P tidak menyimpan rute VPN.
 **Urutan:** `reload in <MENIT>` > Loopback + OSPF > CEF + MPLS LDP > PE: VRF + BGP VPNv4 + PE-CE.
 **Kunci:** `ip vrf forwarding` hapus IP, isi IP setelahnya. `send-community extended` wajib agar RT terkirim.
-**Cek:** `show ip ospf neighbor` | `show mpls ldp neighbor` | `show mpls forwarding-table` | `show ip bgp vpnv4 all summary` | `ping vrf <VRF-NAMA> <CE-LOOPBACK>`
-**Jangan:** BGP sebelum LDP stabil. IP sebelum `ip vrf forwarding`. Tanpa `reload in`.
+**Pemeriksaan:** `show ip ospf neighbor` | `show mpls ldp neighbor` | `show mpls forwarding-table` | `show ip bgp vpnv4 all summary` | `ping vrf <VRF-NAMA> <CE-LOOPBACK>`
+**Larangan:** BGP sebelum LDP stabil. IP sebelum `ip vrf forwarding`. Tanpa `reload in`.
 
 ### Bab 17: Implementasi RR dan CE
 
-**Prinsip:** RR tidak forward trafik pelanggan. CE tidak kenal core.
+**Prinsip:** RR tidak meneruskan lalu lintas pelanggan. CE tidak mengenal core.
 **Urutan:** RR: OSPF + BGP VPNv4, hanya PE sebagai `route-reflector-client`. CE: peering langsung ke PE.
-**Kunci:** Filter di PE. Area OSPF PE-CE terpisah dari area 0.
-**Cek:** `show ip bgp vpnv4 all summary` | `show ip route vrf <VRF-NAMA>` | `ping vrf <VRF-NAMA> <CE-LOOPBACK>`
-**Jangan:** CE sebagai client RR. RR sebagai PE layanan. Peering via antarmuka fisik.
+**Kunci:** Filter diterapkan pada PE. Area OSPF PE-CE terpisah dari area 0.
+**Pemeriksaan:** `show ip bgp vpnv4 all summary` | `show ip route vrf <VRF-NAMA>` | `ping vrf <VRF-NAMA> <CE-LOOPBACK>`
+**Larangan:** CE sebagai client RR. RR sebagai PE layanan. Peering melalui antarmuka fisik.
 
 ### Bab 18: Validasi End-to-End dan Cutover
 
-**Prinsip:** Established bukan bukti forwarding. Rute bukan bukti label. Ping kecil bukan bukti MTU.
-**Urutan:** OSPF FULL > label terbentuk > rute VPNv4 > rute di VRF > ping VRF + MTU > failover P/PE/gateway.
-**Cek:** `show ip ospf neighbor` | `show mpls forwarding-table` | `show ip bgp vpnv4 vrf <VRF-NAMA>` | `ping vrf <VRF-NAMA> <CE-LOOPBACK> size <MTU-TEST> df-bit` | `traceroute vrf <VRF-NAMA> <CE-LOOPBACK>`
-**Jangan:** Ping tanpa `vrf`. Tanpa uji MTU, isolasi, failover.
+**Prinsip:** Status Established bukan merupakan bukti penerusan. Rute bukan merupakan bukti label. Ping kecil bukan merupakan bukti MTU.
+**Urutan:** OSPF FULL > label terbentuk > rute VPNv4 > rute pada VRF > ping VRF + MTU > pengalihan P/PE/gateway.
+**Pemeriksaan:** `show ip ospf neighbor` | `show mpls forwarding-table` | `show ip bgp vpnv4 vrf <VRF-NAMA>` | `ping vrf <VRF-NAMA> <CE-LOOPBACK> size <MTU-TEST> df-bit` | `traceroute vrf <VRF-NAMA> <CE-LOOPBACK>`
+**Larangan:** Ping tanpa `vrf`. Tanpa uji MTU, isolasi, dan pengalihan.
 
 ## Bagian IV — Operasi
 
 ### Bab 19: Operasi Harian
 
-**Prinsip:** Cari penyimpangan, bukan hanya down. Tanpa baseline, anomali tidak terlihat.
-**Lakukan:** Bandingkan ke baseline: adjacency OSPF, neighbor LDP, sesi BGP, rute per VRF, CPU, memori.
-**Cek:** `show ip ospf neighbor` | `show mpls ldp neighbor` | `show ip bgp vpnv4 all summary` | `show cpu` | `show ntp status` | `show archive config`
-**Jangan:** Hanya cek up/down. Abaikan log dan arsip.
+**Prinsip:** Penyimpangan perlu dicari, bukan hanya status tidak aktif. Tanpa garis dasar, anomali tidak terlihat.
+**Tindakan:** Pembandingan terhadap garis dasar: adjacency OSPF, neighbor LDP, sesi BGP, rute per VRF, CPU, memori.
+**Pemeriksaan:** `show ip ospf neighbor` | `show mpls ldp neighbor` | `show ip bgp vpnv4 all summary` | `show cpu` | `show ntp status` | `show archive config`
+**Larangan:** Hanya memeriksa status aktif/tidak aktif. Mengabaikan log dan arsip.
 
 ### Bab 20: Troubleshooting
 
-**Prinsip:** Ikut lapisan. Jangan ubah BGP jika OSPF belum sehat.
+**Prinsip:** Penelusuran mengikuti lapisan. BGP tidak diubah jika OSPF belum sehat.
 **Alur:** Fisik/L2 > OSPF > LDP/MPLS > BGP VPNv4 > VRF/RT > PE-CE > QoS/CoPP.
-**Cek:** `show ip ospf neighbor` | `show mpls ldp neighbor` | `show ip bgp vpnv4 all summary` | `show ip route vrf <VRF-NAMA>` | `ping vrf <VRF-NAMA> <CE-LOOPBACK>` | `show policy-map control-plane`
-**Jangan:** Ubah RT tanpa pahami kebijakan. Ping tanpa `vrf`. Abaikan CoPP.
+**Pemeriksaan:** `show ip ospf neighbor` | `show mpls ldp neighbor` | `show ip bgp vpnv4 all summary` | `show ip route vrf <VRF-NAMA>` | `ping vrf <VRF-NAMA> <CE-LOOPBACK>` | `show policy-map control-plane`
+**Larangan:** Mengubah RT tanpa memahami kebijakan. Ping tanpa `vrf`. Abaikan CoPP.
 
-### Bab 21: Change, Backup, Lifecycle
+### Bab 21: Perubahan, Pencadangan, Siklus Hidup
 
-**Prinsip:** Tanpa titik kembali, perubahan tidak bisa dipertanggungjawabkan.
+**Prinsip:** Tanpa titik kembali, perubahan tidak dapat dipertanggungjawabkan.
 **Prosedur:**
 
 | Fase | Tindakan |
@@ -428,8 +415,8 @@ ip domain-name <DOMAIN>
 | Lolos | `copy running-config startup-config` + `archive config` + `reload cancel` |
 | Gagal | `reload` atau `configure replace <ARCHIVE-PATH> force` |
 
-**Lifecycle:** `show version` | `show inventory` | `show license feature` | `show archive config`. Pembaruan citra diverifikasi di Feature Navigator untuk citra yang persis sama.
-**Jangan:** Ubah tanpa `reload in`. Backup tidak pernah diuji. Update citra tanpa cek fitur.
+**Siklus Hidup:** `show version` | `show inventory` | `show license feature` | `show archive config`. Pembaruan berkas citra diverifikasi pada Feature Navigator untuk berkas citra yang persis sama.
+**Larangan:** Mengubah tanpa `reload in`. Pencadangan tidak pernah diuji. Pembaruan citra tanpa pemeriksaan fitur.
 
 ## Appendix
 
@@ -458,32 +445,32 @@ show archive config
 | `<VRF-NAMA>` | Nama VRF |
 | `<RT>` / `<RD>` | Route Target / Route Distinguisher |
 | `<FROM-VAULT>` | Nilai dari vault, tidak ditulis di dokumen |
-| `<MENIT>` | Durasi rollback otomatis |
+| `<MENIT>` | Durasi pengembalian otomatis |
 
 ### Appendix C: Batasan Platform
 
-Verifikasi di Feature Navigator sebelum desain final. MPLS, QoS lanjutan, dan fitur keamanan bervariasi antar platform dan citra.
+Verifikasi dilakukan pada Feature Navigator sebelum desain final. MPLS, QoS lanjutan, dan fitur keamanan bervariasi antar platform dan berkas citra.
 
 ### Appendix D: Studi Kasus
 
 | Kasus | Desain | Hasil yang Dibuktikan |
 | --- | --- | --- |
-| A. HQ + Branch + DC, MPLS L3VPN | 2 P, 3 PE, 2 RR, VRF per unit bisnis | Isolasi VRF, failover P/PE |
-| B. Campus Multi-Building, VRF Lite | VRF Lite per gedung, tanpa MPLS | Isolasi tanpa core MPLS |
-| C. Dual DC + HA + QoS Voice/Video | Dual PE, HSRP, QoS priority voice | Failover gateway, voice tanpa drop |
-| D. Migrasi Flat Static ke OSPF + BGP + MPLS | Migrasi bertahap per site, rollback per site | Cutover tanpa gangguan massal |
+| A. HQ + Branch + DC, MPLS L3VPN | 2 P, 3 PE, 2 RR, VRF per unit bisnis | Isolasi VRF, pengalihan P/PE |
+| B. Kampus Multi-Building, VRF Lite | VRF Lite per gedung, tanpa MPLS | Isolasi tanpa core MPLS |
+| C. Dual DC + HA + QoS Voice/Video | Dual PE, HSRP, QoS priority voice | Pengalihan gateway, voice tanpa pengguguran |
+| D. Migrasi Flat Static ke OSPF + BGP + MPLS | Migrasi bertahap per situs, pengembalian per situs | Cutover tanpa gangguan massal |
 
-### Appendix F: Template Baseline Golden Config
+### Appendix F: Templat Garis Dasar Golden Config
 
-**Prinsip:** Satu baseline per peran. Semua perangkat mulai dari baseline yang sama, ditambah konfigurasi peran.
+**Prinsip:** Satu garis dasar per peran. Semua perangkat dimulai dari garis dasar yang sama, ditambah konfigurasi peran.
 
-**Baseline Umum — Semua Peran:** Gabungan dari Bab yang sudah ada, bukan konfig baru. Jangan salin ulang dari sini jika sudah terapkan Bab terkait.
+**Garis dasar Umum — Semua Peran:** Gabungan dari Bab yang sudah ada, bukan konfigurasi baru. Penyalinan ulang dari bagian ini tidak diperlukan jika Bab terkait sudah diterapkan.
 
 | Komponen | Sumber Tunggal |
 | --- | --- |
 | Hardening, VTY, `enable secret` | Bab 3 |
 | NTP, DNS, domain | Bab 14 |
-| Archive, backup | Bab 21 |
+| Archive, pencadangan | Bab 21 |
 | Logging | Baris unik di bawah |
 
 ```
@@ -500,28 +487,28 @@ logging host <SYSLOG-SERVER>
 | RR | Loopback0 + OSPF area 0 + BGP VPNv4, `route-reflector-client` ke PE |
 | CE | Loopback0 + peering ke PE, eBGP / OSPF / static |
 
-**Verifikasi:** `show running-config` sesuai baseline + `show archive config`
+**Verifikasi:** `show running-config` sesuai garis dasar + `show archive config`
 
 ### Appendix G: Matriks Platform vs Fitur & Lisensi
 
-**Prinsip:** Verifikasi di Feature Navigator untuk citra yang persis sama. Tabel ini panduan awal, bukan keputusan final.
+**Prinsip:** Verifikasi dilakukan pada Feature Navigator untuk berkas citra yang persis sama. Tabel ini merupakan panduan awal, bukan keputusan final.
 
 | Platform | Peran Cocok | MPLS | Routing Dinamis | Catatan |
 | --- | --- | --- | --- | --- |
 | 2960-X / WS-C2960 | Access | Tidak | Static / terbatas | Fokus Layer 2, STP, QoS dasar |
-| 3560-X / WS-C3560 | Access / Distribution kecil | Terbatas | OSPF / BGP terbatas | Cek lisensi IP Services |
-| 3750-X | Distribution / PE kecil | Terbatas | OSPF / BGP | Stack, cek citra dan lisensi |
+| 3560-X / WS-C3560 | Access / Distribution kecil | Terbatas | OSPF / BGP terbatas | Pemeriksaan lisensi IP Services diperlukan |
+| 3750-X | Distribution / PE kecil | Terbatas | OSPF / BGP | Stack, pemeriksaan berkas citra dan lisensi diperlukan |
 | 3850 | Distribution / PE | Ya, verifikasi citra | OSPF / BGP | Stack, QoS lanjutan |
-| ISR 2900 | PE / CE / Branch | Ya, verifikasi citra | OSPF / BGP | Cek lisensi Data / Security |
+| ISR 2900 | PE / CE / Branch | Ya, verifikasi citra | OSPF / BGP | Pemeriksaan lisensi Data / Security diperlukan |
 | ISR 4000 (4321 / 4331 / 4351) | PE / CE / Branch | Ya, verifikasi citra | OSPF / BGP | Performa dan lisensi per model berbeda |
 
 **Verifikasi:** `show version` | `show license feature` | `show inventory` + Feature Navigator.
 
 ### Appendix H: Recovery Darurat
 
-**Prinsip:** Akses console adalah jalan terakhir. Prosedur harus diuji sebelum insiden, bukan saat insiden.
+**Prinsip:** Akses console merupakan jalan terakhir. Prosedur wajib diuji sebelum insiden, bukan saat insiden.
 
-**Password Recovery — IOS  :**
+**Password Recovery — IOS :**
 
 ```
 1. Console, reboot, kirim Break saat boot
@@ -537,56 +524,56 @@ logging host <SYSLOG-SERVER>
 **IOS Corrupt / Boot Gagal:**
 
 ```
-1. Console, cek rommon> dir flash:
+1. Console, periksa rommon> dir flash:
 2. Jika citra tersedia: rommon> boot flash:<IOS-IMAGE>
-3. Jika tidak tersedia: XMODEM / TFTP via ROMMON, atau ganti flash
+3. Jika tidak tersedia: XMODEM / TFTP melalui ROMMON, atau ganti flash
 4. Setelah boot: verifikasi show version, copy running-config startup-config
 ```
 
 **Config-Register:** `0x2102` normal. `0x2142` bypass startup-config untuk recovery. Kembalikan ke `0x2102` setelah recovery.
 **Verifikasi:** `show version | include Configuration register` | `show boot` | `show flash:`
 
-### Appendix I: Matriks Pengujian Failover
+### Appendix I: Matriks Pengujian Pengalihan
 
 **Prinsip:** Redundansi yang tidak diuji dianggap tidak ada.
 
 | Pengujian | Cara | Kriteria Lolos |
 | --- | --- | --- |
-| P down | `shutdown` satu P / cabut link core | OSPF reconverge, LDP dan BGP kembali, ping VRF pulih |
-| PE down | `shutdown` satu PE | CE pindah ke PE cadangan, rute VPNv4 via PE lain |
-| RR down | `shutdown` satu RR | Sesi BGP VPNv4 via RR kedua tetap Established |
-| Gateway down | `shutdown` gateway aktif HSRP | VIP pindah ke standby, ping gateway pulih |
-| Link core down | `shutdown` satu link P-PE / P-P | Trafik pindah ke link lain, tanpa loss berkepanjangan |
-| PE-CE down | `shutdown` link PE-CE | Sesi PE-CE cadangan aktif, rute VRF pulih |
+| P tidak aktif | `shutdown` satu P / cabut tautan core | OSPF konvergensi ulang, LDP dan BGP kembali, ping VRF pulih |
+| PE tidak aktif | `shutdown` satu PE | CE berpindah ke PE cadangan, rute VPNv4 melalui PE lain |
+| RR tidak aktif | `shutdown` satu RR | Sesi BGP VPNv4 melalui RR kedua tetap Established |
+| Gateway tidak aktif | `shutdown` gateway aktif HSRP | VIP berpindah ke standby, ping gateway pulih |
+| Tautan core tidak aktif | `shutdown` satu tautan P-PE / P-P | Lalu lintas berpindah ke tautan lain, tanpa kehilangan paket berkepanjangan |
+| PE-CE tidak aktif | `shutdown` tautan PE-CE | Sesi PE-CE cadangan aktif, rute VRF pulih |
 
-**Prosedur Uji:** Lakukan pada jendela yang disepakati. Catat waktu reconverge, hasil ping VRF sebelum dan sesudah, dan arsip konfigurasi setelah uji.
+**Prosedur Uji:** Pengujian dilaksanakan pada jendela yang disepakati. Waktu konvergensi ulang, hasil ping VRF sebelum dan sesudah, serta arsip konfigurasi setelah uji dicatat.
 **Verifikasi:** `show ip ospf neighbor` | `show mpls ldp neighbor` | `show ip bgp vpnv4 all summary` | `show standby brief` | `ping vrf <VRF-NAMA> <CE-LOOPBACK>`
 
 ### Appendix J: Studi Kasus Perusahaan Perbankan — HO, DRC, Cabang, ATM
 
-**Profil:** Bank dengan Kantor Pusat (HO), Disaster Recovery Center (DRC) sebagai backup, 20 Kantor Cabang, dan jaringan ATM.
-**Masalah:** Core banking, ATM, corporate, dan guest tercampur. Tidak ada DRC yang teruji. Log antar site tidak terkorelasi. Audit gagal karena isolasi tidak terbukti.
-**Prinsip:** Satu core, satu kebijakan. HO aktif, DRC standby teruji. Cabang dan ATM tidak saling mencapai. Replikasi HO-DRC terisolasi di VRF sendiri.
+**Profil:** Bank dengan Kantor Pusat (HO), Disaster Recovery Center (DRC) sebagai cadangan, 20 Kantor Cabang, dan jaringan ATM.
+**Masalah:** Core banking, ATM, corporate, dan guest tercampur. Tidak terdapat DRC yang teruji. Log antar situs tidak terkorelasi. Audit gagal karena isolasi tidak terbukti.
+**Prinsip:** Satu core, satu kebijakan. HO aktif, DRC standby teruji. Cabang dan ATM tidak saling mencapai. Replikasi HO-DRC terisolasi pada VRF sendiri.
 
 #### J.1 Arsitektur
 
-| Site | Peran | Perangkat | VRF |
+| Situs | Peran | Perangkat | VRF |
 | --- | --- | --- | --- |
 | HO | Aktif, core banking | 2 P, 2 PE, 2 RR | CORE-BANKING, ATM, CORP, GUEST, DRC-REPLIKASI |
-| DRC | Backup, standby | 1 P, 1 PE, 1 RR standby | CORE-BANKING, ATM, DRC-REPLIKASI |
+| DRC | Cadangan, standby | 1 P, 1 PE, 1 RR standby | CORE-BANKING, ATM, DRC-REPLIKASI |
 | Cabang | Layanan cabang | 1 CE per cabang | CORE-BANKING, CORP |
-| ATM | Jaringan ATM | 1 CE per cluster ATM / via CE Cabang | ATM |
+| ATM | Jaringan ATM | 1 CE per cluster ATM / melalui CE Cabang | ATM |
 
-**Topologi:** HO — DRC terhubung via 2 link core. Cabang dan ATM hanya peer ke PE HO / PE DRC, tidak peer antar cabang.
+**Topologi:** HO — DRC terhubung melalui dua tautan core. Cabang dan ATM hanya peer ke PE HO / PE DRC, tidak peer antar cabang.
 
-#### J.2 Template — PE HO
+#### J.2 Templat — PE HO
 
-**Purpose:** PE HO adalah terminasi utama semua VRF perbankan. Semua trafik cabang dan ATM masuk lewat PE HO saat HO aktif.
-**When Used:** Dipakai di 2 PE HO. Rollout PE kedua hanya setelah PE pertama stabil dan failover teruji.
-**Template:**
+**Tujuan:** PE HO merupakan terminasi utama semua VRF perbankan. Semua lalu lintas cabang dan ATM masuk melalui PE HO saat HO aktif.
+**Kondisi Penggunaan:** Digunakan pada dua PE HO. Rollout PE kedua hanya dilakukan setelah PE pertama stabil dan pengalihan teruji.
+**Templat:**
 
 ```
-! === TEMPLATE PE HO — Salin per PE, ganti <...> ===
+! === TEMPLAT PE HO — Templat per PE, ganti <...> ===
 hostname <PE-HO>
 !
 interface Loopback0
@@ -709,30 +696,30 @@ interface GigabitEthernet<SLOT>/<PORT>
  service-policy output <POLICY-OUT-HO>
 ```
 
-**Per-Block Explanation:**
+**Penjelasan per Blok:**
 
 | Blok | Fungsi | Jika Salah |
 | --- | --- | --- |
-| Loopback0 + OSPF + MPLS LDP | Identitas PE, label end-to-end | Loopback tidak reachable, VPNv4 tidak terbentuk |
-| VRF + RD / RT | Isolasi per layanan | RT salah, VRF terima rute VRF lain |
+| Loopback0 + OSPF + MPLS LDP | Identitas PE, label end-to-end | Loopback tidak terjangkau, VPNv4 tidak terbentuk |
+| VRF + RD / RT | Isolasi per layanan | RT salah, VRF menerima rute VRF lain |
 | `ip vrf forwarding` sebelum IP | Ikat antarmuka ke VRF | IP hilang jika diisi sebelum VRF |
-| BGP VPNv4 ke 2 RR | Redundansi refleksi | Hanya 1 RR, RR down = rute hilang |
-| BGP VRF + `prefix-list` | Filter CE, CE tidak banjiri VRF | Tanpa filter, prefix liar masuk VRF |
-| QoS `BANKING AF31 / ATM AF21 / VOICE EF` | Prioritas perbankan | Tanpa QoS, ATM menekan banking saat congestion |
-| HSRP + `track` | Gateway pindah jika link P down | Tanpa track, VIP diam di PE yang link core-nya down |
-| BFD PE-CE | Deteksi link down cepat | Tanpa BFD, failover lambat, transaksi timeout |
+| BGP VPNv4 ke 2 RR | Redundansi refleksi | Hanya satu RR, RR tidak aktif menyebabkan rute hilang |
+| BGP VRF + `prefix-list` | Filter CE, CE tidak membebani VRF secara berlebihan | Tanpa filter, prefix tidak sah masuk ke VRF |
+| QoS `BANKING AF31 / ATM AF21 / VOICE EF` | Prioritas perbankan | Tanpa QoS, ATM menekan banking saat kemacetan |
+| HSRP + `track` | Gateway berpindah jika tautan P terputus | Tanpa track, VIP tetap bertahan pada PE yang tautan core-nya terputus |
+| BFD PE-CE | Deteksi tautan terputus secara cepat | Tanpa BFD, pengalihan lambat, transaksi melampaui batas waktu |
 
-**Verification:** `show ip bgp vpnv4 all summary` | `show ip route vrf CORE-BANKING` | `show ip route vrf ATM` | `ping vrf CORE-BANKING <CE-HO-LOOPBACK>` | `show standby brief` | `show policy-map interface GigabitEthernet<SLOT>/<PORT>` | `show bfd neighbors`
-**Common Errors:** IP diisi sebelum `ip vrf forwarding`. RT ATM = RT BANKING sehingga isolasi rusak. Hanya peer ke 1 RR. HSRP tanpa `preempt` + `track` sehingga VIP tidak pindah. QoS tanpa `service-policy output`.
+**Verifikasi:** `show ip bgp vpnv4 all summary` | `show ip route vrf CORE-BANKING` | `show ip route vrf ATM` | `ping vrf CORE-BANKING <CE-HO-LOOPBACK>` | `show standby brief` | `show policy-map interface GigabitEthernet<SLOT>/<PORT>` | `show bfd neighbors`
+**Kesalahan Umum:** IP diisi sebelum `ip vrf forwarding`. RT ATM = RT BANKING sehingga isolasi rusak. Hanya peer ke satu RR. HSRP tanpa `preempt` + `track` sehingga VIP tidak berpindah. QoS tanpa `service-policy output`.
 
-#### J.3 Template — PE DRC
+#### J.3 Templat — PE DRC
 
-**Purpose:** PE DRC mengambil alih layanan jika HO down. Bukan sekadar backup konfigurasi — harus bisa transaksi.
-**When Used:** Dipakai di 1 PE DRC. Diuji failover berkala pada jendela yang disepakati. Saat HO aktif, DRC standby.
-**Template:**
+**Tujuan:** PE DRC mengambil alih layanan jika HO tidak aktif. PE DRC bukan sekadar cadangan konfigurasi, PE DRC wajib dapat melayani transaksi.
+**Kondisi Penggunaan:** Digunakan pada satu PE DRC. Pengalihan diuji secara berkala pada jendela yang disepakati. Saat HO aktif, DRC standby.
+**Templat:**
 
 ```
-! === TEMPLATE PE DRC — Berbasis PE HO, bedanya di bawah ===
+! === TEMPLAT PE DRC — Berbasis PE HO, perbedaan tercantum di bawah ===
 hostname <PE-DRC>
 !
 interface Loopback0
@@ -796,27 +783,27 @@ router bgp <BGP-AS>
  exit-address-family
 ```
 
-**Per-Block Explanation:**
+**Penjelasan per Blok:**
 
 | Blok | Fungsi |
 | --- | --- |
-| VRF sama dengan HO | DRC bisa terima rute yang sama saat failover |
-| VRF DRC-REPLIKASI terpisah | Replikasi tidak tercampur dengan transaksi |
-| HSRP priority DRC lebih rendah | VIP di HO saat HO aktif, pindah ke DRC saat HO down |
-| BGP VPNv4 ke 2 RR | DRC tetap dapat rute walau 1 RR down |
+| VRF sama dengan HO | DRC dapat menerima rute yang sama saat pengalihan |
+| VRF DRC-REPLIKASI terpisah | Replikasi tidak bercampur dengan transaksi |
+| HSRP priority DRC lebih rendah | VIP berada pada HO saat HO aktif, berpindah ke DRC saat HO tidak aktif |
+| BGP VPNv4 ke 2 RR | DRC tetap memperoleh rute walaupun satu RR tidak aktif |
 
-**Verification:** `show standby brief` | `show ip bgp vpnv4 vrf CORE-BANKING summary` | `ping vrf DRC-REPLIKASI <PE-HO-LOOPBACK>` | uji transaksi core banking dari DRC
-**Common Errors:** RD DRC beda dengan HO sehingga replikasi tidak nyambung. HSRP priority DRC = HO sehingga flapping. DRC tidak pernah diuji failover sehingga saat HO down ternyata tidak bisa transaksi.
-**Failover Test:** 1. `shutdown` PE HO, verifikasi VIP pindah ke DRC, transaksi uji lolos. 2. `no shutdown` PE HO, verifikasi VIP kembali ke HO, replikasi normal.
+**Verifikasi:** `show standby brief` | `show ip bgp vpnv4 vrf CORE-BANKING summary` | `ping vrf DRC-REPLIKASI <PE-HO-LOOPBACK>` | uji transaksi core banking dari DRC
+**Kesalahan Umum:** RD DRC berbeda dengan HO sehingga replikasi tidak tersambung. HSRP priority DRC = HO sehingga terjadi ketidakstabilan status naik-turun berulang. DRC tidak pernah diuji pengalihannya sehingga saat HO tidak aktif ternyata tidak dapat melayani transaksi.
+**Uji Pengalihan:** 1. `shutdown` PE HO, verifikasi VIP berpindah ke DRC, transaksi uji lolos. 2. `no shutdown` PE HO, verifikasi VIP kembali ke HO, replikasi normal.
 
-#### J.4 Template — CE Cabang
+#### J.4 Templat — CE Cabang
 
-**Purpose:** Template baku untuk 20 cabang. Satu template, dipakai 20x dengan ganti placeholder per cabang.
-**When Used:** Setiap cabang baru, pilot 2 cabang dulu, verifikasi transaksi, baru rollout 18 sisa.
-**Template — CE Cabang:**
+**Tujuan:** Templat baku untuk 20 cabang. Satu templat digunakan 20x dengan penggantian placeholder per cabang.
+**Kondisi Penggunaan:** Setiap cabang baru, pilot dua cabang terlebih dahulu, verifikasi transaksi, kemudian rollout 18 cabang sisanya.
+**Templat — CE Cabang:**
 
 ```
-! === TEMPLATE CE CABANG ===
+! === TEMPLAT CE CABANG ===
 hostname <CE-CABANG>
 !
 interface Loopback0
@@ -844,7 +831,7 @@ router bgp <CE-AS>
  network <NETWORK-CABANG-CORP> mask <MASK-CABANG>
 ```
 
-**Template — PE untuk Cabang:**
+**Templat — PE untuk Cabang:**
 
 ```
 router bgp <BGP-AS>
@@ -859,26 +846,26 @@ router bgp <BGP-AS>
  exit-address-family
 ```
 
-**Per-Block Explanation:**
+**Penjelasan per Blok:**
 
 | Blok | Fungsi |
 | --- | --- |
-| CE peer ke PE HO + PE DRC | Cabang tetap jalan jika HO down |
-| `prefix-list` di CE dan PE | Filter dua arah, cabang tidak banjiri core |
-| BFD PE-CE | Failover HO ke DRC cepat |
+| CE peer ke PE HO + PE DRC | Cabang tetap beroperasi jika HO tidak aktif |
+| `prefix-list` di CE dan PE | Filter dua arah, cabang tidak membebani core secara berlebihan |
+| BFD PE-CE | Pengalihan HO ke DRC secara cepat |
 | Tanpa peering antar cabang | Isolasi cabang, audit lolos |
 
-**Verification:** `show ip bgp vpnv4 vrf CORE-BANKING neighbors` | `ping vrf CORE-BANKING <CE-CABANG-LOOPBACK>` | uji transaksi cabang | `show bfd neighbors`
-**Common Errors:** CE hanya peer ke PE HO, saat HO down cabang ikut down. `network` salah sehingga prefix cabang tidak diiklankan. Prefix-list tidak dipasang sehingga prefix liar masuk VRF.
+**Verifikasi:** `show ip bgp vpnv4 vrf CORE-BANKING neighbors` | `ping vrf CORE-BANKING <CE-CABANG-LOOPBACK>` | uji transaksi cabang | `show bfd neighbors`
+**Kesalahan Umum:** CE hanya peer ke PE HO, saat HO tidak aktif cabang ikut tidak aktif. `network` salah sehingga prefix cabang tidak diiklankan. Prefix-list tidak dipasang sehingga prefix tidak sah masuk ke VRF.
 
-#### J.5 Template — Jaringan ATM
+#### J.5 Templat — Jaringan ATM
 
-**Purpose:** ATM adalah jaringan paling sensitif. Harus terisolasi total dari CORP dan GUEST.
-**When Used:** Setiap cluster ATM baru. Pilot 5 ATM dulu, verifikasi isolasi + transaksi, baru rollout semua.
-**Template — PE untuk ATM:**
+**Tujuan:** ATM merupakan jaringan paling sensitif. ATM wajib terisolasi total dari CORP dan GUEST.
+**Kondisi Penggunaan:** Setiap cluster ATM baru. Pilot lima ATM terlebih dahulu, verifikasi isolasi dan transaksi, kemudian rollout seluruhnya.
+**Templat — PE untuk ATM:**
 
 ```
-! === TEMPLATE PE ATM ===
+! === TEMPLAT PE ATM ===
 ip vrf ATM
  rd <RD-ATM>
  route-target export <RT-ATM>
@@ -912,10 +899,10 @@ interface GigabitEthernet<SLOT>/<PORT>
  service-policy output <POLICY-OUT-ATM>
 ```
 
-**Template — CE ATM:**
+**Templat — CE ATM:**
 
 ```
-! === TEMPLATE CE ATM ===
+! === TEMPLAT CE ATM ===
 hostname <CE-ATM>
 !
 interface Loopback0
@@ -935,26 +922,26 @@ router bgp <CE-AS>
  network <NETWORK-ATM> mask <MASK-ATM>
 ```
 
-**Per-Block Explanation:**
+**Penjelasan per Blok:**
 
 | Blok | Fungsi |
 | --- | --- |
-| VRF ATM + RT ATM saja | Tidak ada leaking ke CORP / GUEST |
+| VRF ATM + RT ATM saja | Tidak terdapat leaking ke CORP / GUEST |
 | `prefix-list` ATM | Hanya prefix ATM yang boleh masuk |
-| QoS ATM + policing | ATM tidak menekan banking, ATM dibatasi rate |
-| CE ATM peer ke PE HO + DRC | ATM tetap jalan saat HO down |
+| QoS ATM + policing | ATM tidak menekan banking, ATM dibatasi rate-nya |
+| CE ATM peer ke PE HO + DRC | ATM tetap beroperasi saat HO tidak aktif |
 
-**Verification — Bukti Isolasi (Wajib untuk Audit):** `show ip route vrf ATM` tidak berisi rute CORP | `ping vrf ATM <ATM-SERVER>` berhasil | `ping vrf ATM <CORP-SERVER>` harus gagal | `ping vrf ATM <GUEST-SERVER>` harus gagal | uji transaksi ATM 20x (tarik tunai, cek saldo, transfer)
-**Common Errors:** RT ATM = RT CORP sehingga leaking. Tanpa prefix-list, prefix ATM tercampur. Tanpa policing, ATM membanjiri link saat serangan. QoS ATM tidak dipasang sehingga transaksi ATM timeout saat congestion.
+**Verifikasi — Bukti Isolasi (Wajib untuk Audit):** `show ip route vrf ATM` tidak berisi rute CORP | `ping vrf ATM <ATM-SERVER>` berhasil | `ping vrf ATM <CORP-SERVER>` wajib gagal | `ping vrf ATM <GUEST-SERVER>` wajib gagal | pengujian transaksi ATM 20x (tarik tunai, pemeriksaan saldo, transfer)
+**Kesalahan Umum:** RT ATM = RT CORP sehingga terjadi leaking. Tanpa prefix-list, prefix ATM bercampur. Tanpa policing, ATM membebani tautan secara berlebihan saat serangan. QoS ATM tidak dipasang sehingga transaksi ATM melampaui batas waktu saat kemacetan.
 
-#### J.6 Template — Keamanan & Operasi Perbankan
+#### J.6 Templat — Keamanan & Operasi Perbankan
 
-**Purpose:** Hardening, NTP, CoPP, arsip — satu standar untuk semua perangkat perbankan.
-**When Used:** Diterapkan di semua PE, P, RR, CE perbankan sebelum cutover.
-**Template:**
+**Tujuan:** Hardening, NTP, CoPP, arsip — satu standar untuk semua perangkat perbankan.
+**Kondisi Penggunaan:** Diterapkan pada semua PE, P, RR, CE perbankan sebelum cutover.
+**Templat:**
 
 ```
-! === TEMPLATE HARDENING + NTP + CoPP — PERBANKAN ===
+! === TEMPLAT HARDENING + NTP + CoPP — PERBANKAN ===
 enable secret <FROM-VAULT>
 service password-encryption
 no ip http server
@@ -994,30 +981,30 @@ archive
  write-memory
 ```
 
-**Per-Block Explanation:**
+**Penjelasan per Blok:**
 
 | Blok | Fungsi |
 | --- | --- |
-| NTP auth + trusted-key | Log terkorelasi, anti spoofing NTP |
-| CoPP | CPU routing terlindungi dari storm |
+| NTP auth + trusted-key | Log terkorelasi, anti-spoofing NTP |
+| CoPP | CPU routing terlindungi dari lonjakan lalu lintas |
 | VTY + ACL | Hanya SSH dari manajemen |
-| Archive + `hidekeys` | Rollback tersedia, password tidak terekspos di log |
+| Archive + `hidekeys` | Pengembalian tersedia, password tidak terekspos pada log |
 
-**Verification:** `show ntp status` | `show ntp associations` | `show policy-map control-plane` | `show archive config` | `show login`
-**Common Errors:** NTP tanpa auth sehingga log bisa dimanipulasi. CoPP terlalu ketat menjatuhkan OSPF / BGP. Archive tanpa `hidekeys` sehingga password terekspos.
+**Verifikasi:** `show ntp status` | `show ntp associations` | `show policy-map control-plane` | `show archive config` | `show login`
+**Kesalahan Umum:** NTP tanpa auth sehingga log dapat dimanipulasi. CoPP yang terlalu ketat menjatuhkan OSPF / BGP. Archive tanpa `hidekeys` sehingga password terekspos.
 
-**Operasi:** Baseline harian: adjacency OSPF, neighbor LDP, sesi BGP VPNv4, rute per VRF, CPU, NTP, arsip. Uji failover HO-DRC berkala pada jendela yang disepakati.
-**Verifikasi Akhir:** Transaksi core banking HO dan DRC lolos, transaksi cabang lolos, transaksi ATM lolos, isolasi VRF terbukti, log terkorelasi via NTP, arsip terbaru tersedia.
+**Operasi:** Garis dasar harian: adjacency OSPF, neighbor LDP, sesi BGP VPNv4, rute per VRF, CPU, NTP, arsip. Uji pengalihan HO-DRC berkala pada jendela yang disepakati.
+**Verifikasi Akhir:** Transaksi core banking HO dan DRC lolos, transaksi cabang lolos, transaksi ATM lolos, isolasi VRF terbukti, log terkorelasi melalui NTP, arsip terbaru tersedia.
 
 **Pola Implementasi Perbankan:**
 
 | Fase | Tindakan |
 | --- | --- |
-| 1. Core HO | Baseline + OSPF + LDP, verifikasi label |
-| 2. DRC | Bangun PE DRC, uji replikasi dan failover HO-DRC |
-| 3. Cabang | Template CE, rollout bertahap, filter di PE |
+| 1. Core HO | Garis dasar + OSPF + LDP, verifikasi label |
+| 2. DRC | Bangun PE DRC, uji replikasi dan pengalihan HO-DRC |
+| 3. Cabang | Templat CE, rollout bertahap, filter pada PE |
 | 4. ATM | VRF ATM terisolasi, uji isolasi dan transaksi |
-| 5. Operasi | Hardening, NTP, CoPP, QoS, arsip, uji failover berkala |
+| 5. Operasi | Hardening, NTP, CoPP, QoS, arsip, uji pengalihan berkala |
 
 Parameter class-map
 
@@ -1028,105 +1015,102 @@ class-map [match-all | match-any] <CLASS-NAMA>
  match <PARAMETER>
 ```
 
-**Prinsip:** `match-all` = semua kondisi harus terpenuhi (AND). `match-any` = satu kondisi terpenuhi sudah cukup (OR). Default IOS   adalah `match-all` jika tidak ditulis.
+**Prinsip:** `match-all` = semua kondisi harus terpenuhi (AND). `match-any` = satu kondisi terpenuhi sudah cukup (OR). Default IOS adalah `match-all` jika tidak ditulis.
 
 | Parameter | Sintaks | Fungsi | Contoh | Catatan |
 | --- | --- | --- | --- | --- |
-| `match-all` / `match-any` | `class-map match-any <NAMA>` | Menentukan logika antar kondisi match | `class-map match-any VOICE` | Default `match-all`. Gunakan `match-any` untuk klasifikasi QoS. |
-| `match dscp` | `match dscp <NILAI>` | Klasifikasi berdasarkan DSCP | `match dscp ef` | `ef` voice, `af31` banking/WMS, `af21` ATM/POS. Bisa list: `match dscp ef af31` |
-| `match ip dscp` | `match ip dscp <NILAI>` | Sama dengan `match dscp`, khusus IPv4 | `match ip dscp ef` | Gunakan `match dscp` untuk IPv4 + IPv6. |
+| `match-all` / `match-any` | `class-map match-any <NAMA>` | Menentukan logika antar kondisi match | `class-map match-any VOICE` | Default `match-all`. `match-any` digunakan untuk klasifikasi QoS. |
+| `match dscp` | `match dscp <NILAI>` | Klasifikasi berdasarkan DSCP | `match dscp ef` | `ef` voice, `af31` banking/WMS, `af21` ATM/POS. Dapat berupa daftar: `match dscp ef af31` |
+| `match ip dscp` | `match ip dscp <NILAI>` | Sama dengan `match dscp`, khusus IPv4 | `match ip dscp ef` | `match dscp` digunakan untuk IPv4 + IPv6. |
 | `match precedence` | `match precedence <0-7>` | Klasifikasi berdasarkan IP Precedence lama | `match precedence 5` | Legacy. Utamakan DSCP. |
 | `match ip precedence` | `match ip precedence <0-7>` | Sama dengan di atas, khusus IPv4 | `match ip precedence 5` | Legacy. |
 | `match cos` | `match cos <0-7>` | Klasifikasi berdasarkan CoS Layer 2 (802.1p) | `match cos 5` | Hanya pada trunk / antarmuka Layer 2. |
-| `match vlan` | `match vlan <VLAN-ID>` | Klasifikasi berdasarkan VLAN | `match vlan <VLAN-VOICE>` | Untuk QoS per VLAN di PE / distribution. |
+| `match vlan` | `match vlan <VLAN-ID>` | Klasifikasi berdasarkan VLAN | `match vlan <VLAN-VOICE>` | Untuk QoS per VLAN pada PE / distribution. |
 | `match access-group` | `match access-group name <ACL-NAMA>` | Klasifikasi berdasarkan ACL | `match access-group name <ACL-VOICE>` | Paling fleksibel: IP, port, protokol. |
-| `match access-group` (nomor) | `match access-group <ACL-NOMOR>` | Sama, dengan ACL bernomor | `match access-group 100` | Gunakan nama agar mudah dibaca. |
-| `match protocol` | `match protocol <PROTOKOL>` | Klasifikasi berdasarkan protokol NBAR | `match protocol http` | Tergantung NBAR dan citra. Tidak semua platform. |
+| `match access-group` (nomor) | `match access-group <ACL-NOMOR>` | Sama, dengan ACL bernomor | `match access-group 100` | Nama digunakan agar mudah dibaca. |
+| `match protocol` | `match protocol <PROTOKOL>` | Klasifikasi berdasarkan protokol NBAR | `match protocol http` | Bergantung pada NBAR dan berkas citra. Tidak semua platform. |
 | `match class-map` | `match class-map <CLASS-LAIN>` | Class-map bersarang | `match class-map <CLASS-INDUK>` | Untuk hierarki QoS. |
-| `match qos-group` | `match qos-group <0-99>` | Klasifikasi berdasarkan qos-group dari ingress | `match qos-group 1` | qos-group diset di ingress, dipakai di egress. |
+| `match qos-group` | `match qos-group <0-99>` | Klasifikasi berdasarkan qos-group dari ingress | `match qos-group 1` | qos-group ditetapkan pada ingress, digunakan pada egress. |
 | `match mpls experimental` | `match mpls experimental topmost <0-7>` | Klasifikasi berdasarkan EXP MPLS | `match mpls experimental topmost 5` | Untuk QoS di core P / PE MPLS. |
 | `match input-interface` | `match input-interface <INTERFACE>` | Klasifikasi berdasarkan antarmuka masuk | `match input-interface Gi0/1` | Untuk QoS per antarmuka masuk. |
-| `match packet length` | `match packet length min <MIN> max <MAX>` | Klasifikasi berdasarkan panjang paket | `match packet length min 100 max 1500` | Jarang dipakai untuk voice / banking. |
-| `match ip rtp` | `match ip rtp <PORT-AWAL> <PORT-AKHIR>` | Klasifikasi trafik RTP voice | `match ip rtp 16384 32767` | Alternatif jika DSCP tidak ter-marking. |
+| `match packet length` | `match packet length min <MIN> max <MAX>` | Klasifikasi berdasarkan panjang paket | `match packet length min 100 max 1500` | Jarang digunakan untuk voice / banking. |
+| `match ip rtp` | `match ip rtp <PORT-AWAL> <PORT-AKHIR>` | Klasifikasi lalu lintas RTP voice | `match ip rtp 16384 32767` | Alternatif jika DSCP tidak diberi penanda. |
 
-**Contoh Lengkap — Perbankan:** Definisi class-map: Lihat Bab 11. Nilai bandwidth perbankan: Lihat Appendix J.2. Kombinasi `match dscp` + `match access-group name <ACL-BANKING>` / `<ACL-ATM>` mengikuti tabel parameter di atas.
+**Contoh Lengkap — Perbankan:** Definisi class-map tercantum pada Bab 11. Nilai lebar pita perbankan tercantum pada Appendix J.2. Kombinasi `match dscp` + `match access-group name <ACL-BANKING>` / `<ACL-ATM>` mengikuti tabel parameter di atas.
 
 **Verifikasi:** `show class-map` | `show policy-map interface GigabitEthernet<SLOT>/<PORT>` | `show policy-map`
-**Kesalahan Umum:** Menggunakan `match-all` saat maksudnya `match-any` sehingga trafik tidak terklasifikasi. ACL salah sehingga class-map kosong. DSCP tidak konsisten di ingress dan egress.
+**Kesalahan Umum:** Menggunakan `match-all` saat maksudnya `match-any` sehingga lalu lintas tidak terklasifikasi. ACL salah sehingga class-map kosong. DSCP tidak konsisten pada ingress dan egress.
 
 ### Appendix M: Nilai DSCP
 
-**Prinsip:** DSCP 6 bit, nilai 0-63. Menentukan Per-Hop Behavior (PHB) di setiap hop. Marking harus konsisten di ingress, agar klasifikasi di egress benar.
+**Prinsip:** DSCP 6 bit, nilai 0-63. DSCP menentukan Per-Hop Behavior (PHB) pada setiap hop. Penandaan wajib konsisten pada ingress, agar klasifikasi pada egress benar.
 
-**Struktur AF:** `AFxy` — `x` = class (1-4), `y` = drop precedence (1 = drop paling rendah, 3 = drop paling tinggi). Contoh: `AF31` lebih diprioritaskan daripada `AF11`, dan `AF31` lebih kecil kemungkinan di-drop daripada `AF33`.
+**Struktur AF:** `AFxy` — `x` = class (1-4), `y` = prioritas pengguguran (1 = pengguguran paling rendah, 3 = pengguguran paling tinggi). Contoh: `AF31` lebih diprioritaskan daripada `AF11`, dan `AF31` lebih kecil kemungkinan dibuang daripada `AF33`.
 
 | Nama | DSCP Desimal | DSCP Biner | PHB | Penggunaan Umum | Contoh di Perbankan |
 | --- | --- | --- | --- | --- | --- |
-| CS0 | 0 | 000000 | Best Effort | Default, tanpa prioritas | GUEST, traffic umum |
-| CS1 | 8 | 001000 | Scavenger | Prioritas paling rendah | Backup non-kritis, scavenger |
-| AF11 | 10 | 001010 | Assured Forwarding 1, drop rendah | Data kelas 1 | CORP low |
-| AF12 | 12 | 001100 | Assured Forwarding 1, drop sedang | Data kelas 1 | CORP medium |
-| AF13 | 14 | 001110 | Assured Forwarding 1, drop tinggi | Data kelas 1 | CORP high-drop |
+| CS0 | 0 | 000000 | Best Effort | Default, tanpa prioritas | GUEST, lalu lintas umum |
+| CS1 | 8 | 001000 | Scavenger | Prioritas paling rendah | Pencadangan non-kritis, scavenger |
+| AF11 | 10 | 001010 | Assured Forwarding 1, pengguguran rendah | Data kelas 1 | CORP low |
+| AF12 | 12 | 001100 | Assured Forwarding 1, pengguguran sedang | Data kelas 1 | CORP medium |
+| AF13 | 14 | 001110 | Assured Forwarding 1, pengguguran tinggi | Data kelas 1 | CORP pengguguran tinggi |
 | CS2 | 16 | 010000 | Class Selector 2 | OAM, signaling | Monitoring |
-| AF21 | 18 | 010010 | Assured Forwarding 2, drop rendah | Data kelas 2 | ATM, POS |
-| AF22 | 20 | 010100 | Assured Forwarding 2, drop sedang | Data kelas 2 | ATM, POS |
-| AF23 | 22 | 010110 | Assured Forwarding 2, drop tinggi | Data kelas 2 | ATM, POS |
+| AF21 | 18 | 010010 | Assured Forwarding 2, pengguguran rendah | Data kelas 2 | ATM, POS |
+| AF22 | 20 | 010100 | Assured Forwarding 2, pengguguran sedang | Data kelas 2 | ATM, POS |
+| AF23 | 22 | 010110 | Assured Forwarding 2, pengguguran tinggi | Data kelas 2 | ATM, POS |
 | CS3 | 24 | 011000 | Class Selector 3 | Signaling, broadcast | Signaling, routing |
-| AF31 | 26 | 011010 | Assured Forwarding 3, drop rendah | Data kritis kelas 3 | CORE-BANKING, ERP, WMS |
-| AF32 | 28 | 011100 | Assured Forwarding 3, drop sedang | Data kritis kelas 3 | CORE-BANKING |
-| AF33 | 30 | 011110 | Assured Forwarding 3, drop tinggi | Data kritis kelas 3 | CORE-BANKING |
+| AF31 | 26 | 011010 | Assured Forwarding 3, pengguguran rendah | Data kritis kelas 3 | CORE-BANKING, ERP, WMS |
+| AF32 | 28 | 011100 | Assured Forwarding 3, pengguguran sedang | Data kritis kelas 3 | CORE-BANKING |
+| AF33 | 30 | 011110 | Assured Forwarding 3, pengguguran tinggi | Data kritis kelas 3 | CORE-BANKING |
 | CS4 | 32 | 100000 | Class Selector 4 | Video streaming | Video |
-| AF41 | 34 | 100010 | Assured Forwarding 4, drop rendah | Video kelas 4 | Video conference, CCTV |
-| AF42 | 36 | 100100 | Assured Forwarding 4, drop sedang | Video kelas 4 | Video conference |
-| AF43 | 38 | 100110 | Assured Forwarding 4, drop tinggi | Video kelas 4 | Video conference |
+| AF41 | 34 | 100010 | Assured Forwarding 4, pengguguran rendah | Video kelas 4 | Video conference, CCTV |
+| AF42 | 36 | 100100 | Assured Forwarding 4, pengguguran sedang | Video kelas 4 | Video conference |
+| AF43 | 38 | 100110 | Assured Forwarding 4, pengguguran tinggi | Video kelas 4 | Video conference |
 | CS5 | 40 | 101000 | Class Selector 5 | Signaling voice | Signaling VoIP |
-| VA | 44 | 101100 | Voice Admit | Voice admit | Voice admit, jika dipakai |
-| EF | 46 | 101110 | Expedited Forwarding | Voice, delay dan jitter rendah | VOICE, VoIP |
+| VA | 44 | 101100 | Voice Admit | Voice admit | Voice admit, jika digunakan |
+| EF | 46 | 101110 | Expedited Forwarding | Voice, tunda dan variasi tunda rendah | VOICE, VoIP |
 | CS6 | 48 | 110000 | Class Selector 6 | Network control | OSPF, BGP, LDP |
 | CS7 | 56 | 111000 | Class Selector 7 | Network control | OSPF, BGP, LDP |
 
-**Pemetaan yang Dipakai di Panduan Ini:**
+**Pemetaan yang Digunakan pada Panduan Ini:**
 
-| Trafik | DSCP | Alasan |
+| Lalu lintas | DSCP | Alasan |
 | --- | --- | --- |
-| VOICE | EF (46) | Delay dan jitter paling rendah, priority |
-| CORE-BANKING / ERP / WMS | AF31 (26) | Data kritis, drop rendah |
+| VOICE | EF (46) | Tunda dan variasi tunda paling rendah, priority |
+| CORE-BANKING / ERP / WMS | AF31 (26) | Data kritis, pengguguran rendah |
 | ATM / POS | AF21 (18) | Data penting, di bawah banking |
-| Video / CCTV | AF41 (34) | Bandwidth terjamin, toleran delay |
-| CORP / GUEST | CS0 (0) / AF11 (10) | Default, sisa bandwidth |
-| Routing / Control | CS6 (48) / CS7 (56) | Tidak boleh di-drop oleh QoS data |
+| Video / CCTV | AF41 (34) | Lebar pita terjamin, toleran tunda |
+| CORP / GUEST | CS0 (0) / AF11 (10) | Default, sisa lebar pita |
+| Routing / Control | CS6 (48) / CS7 (56) | Tidak boleh dibuang oleh QoS data |
 
-**Pemetaan ke Class-map:** Definisi class-map: Lihat Bab 11. DSCP di tabel di atas dipetakan ke class VOICE (EF), BANKING (AF31), ATM (AF21), VIDEO (AF41).
+**Pemetaan ke Class-map:** Definisi class-map tercantum pada Bab 11. DSCP pada tabel di atas dipetakan ke class VOICE (EF), BANKING (AF31), ATM (AF21), VIDEO (AF41).
 
 **Verifikasi:** `show policy-map interface GigabitEthernet<SLOT>/<PORT>` | `show class-map`
-**Kesalahan Umum:** Marking EF untuk semua trafik sehingga priority tidak efektif. DSCP berbeda di ingress dan egress. AF33 dipakai untuk trafik kritis sehingga mudah di-drop saat congestion.
+**Kesalahan Umum:** Penandaan EF untuk semua lalu lintas sehingga priority tidak efektif. DSCP berbeda pada ingress dan egress. AF33 digunakan untuk lalu lintas kritis sehingga mudah dibuang saat kemacetan.
 
 ### Appendix N: Golden Config — Route Reflector (RR1 / RR2)
 
-**Prinsip:** RR adalah perangkat kontrol, bukan data plane pelanggan. Konfigurasi harus identik kecuali hostname, Loopback, dan IP link.
+**Prinsip:** RR merupakan perangkat kontrol, bukan data plane pelanggan. Konfigurasi wajib identik kecuali hostname, Loopback, dan IP tautan.
 
-**Konfig Lengkap:** Lihat Bab 7 — Konfigurasi Inti RR1. Jangan salin dari dua tempat. Di bawah ini hanya delta RR2 dan uji failover.
+**Konfigurasi Lengkap:** Tercantum pada Bab 7 — Konfigurasi Inti RR1. Penyalinan dari dua tempat tidak diperbolehkan. Di bawah ini hanya selisih RR2 dan uji pengalihan.
 
-**Delta RR2 — Yang Berbeda dari RR1:**
+**Selisih RR2 — Perbedaan terhadap RR1:**
 
 | Item | RR1 | RR2 |
 | --- | --- | --- |
 | Hostname | `<RR1-HOSTNAME>` | `<RR2-HOSTNAME>` |
 | Loopback / router-id | `<RR1-LOOPBACK>` | `<RR2-LOOPBACK>` |
-| IP link ke P1 / P2 | `<IP-RR1-P1>` / `<IP-RR1-P2>` | `<IP-RR2-P1>` / `<IP-RR2-P2>` |
+| IP tautan ke P1 / P2 | `<IP-RR1-P1>` / `<IP-RR1-P2>` | `<IP-RR2-P1>` / `<IP-RR2-P2>` |
 | Peer RR | `<RR2-LOOPBACK>` | `<RR1-LOOPBACK>` |
 | `cluster-id` | `<CLUSTER-ID>` | Sama — `<CLUSTER-ID>` |
 
-**Failover Test — RR:**
+**Uji Pengalihan — RR:**
 
-| Test | Perintah | Harapan |
+| Pengujian | Perintah | Harapan |
 | --- | --- | --- |
-| RR1 down | `shutdown` RR1 / cabut link | PE tetap Established ke RR2, rute VPNv4 tetap ada |
-| RR1 up kembali | `no shutdown` | PE Established ke RR1 lagi, tidak ada flap VRF |
-| RR1-RR2 link down | `show ip bgp vpnv4 all summary` di RR1 dan RR2 | Masing-masing RR tetap punya rute dari PE client-nya |
+| RR1 tidak aktif | `shutdown` RR1 / cabut tautan | PE tetap Established ke RR2, rute VPNv4 tetap ada |
+| RR1 aktif kembali | `no shutdown` | PE Established ke RR1 lagi, tidak terdapat ketidakstabilan status VRF |
+| RR1-RR2 tautan tidak aktif | `show ip bgp vpnv4 all summary` di RR1 dan RR2 | Masing-masing RR tetap punya rute dari PE client-nya |
 
 **Verifikasi:** `show ip bgp vpnv4 all summary` | `show running-config | section router bgp` | `show ip ospf neighbor`
-**Kesalahan Umum:** Lupa ganti Loopback RR2 sehingga router-id duplikat. `cluster-id` beda. `route-reflector-client` tertinggal di satu PE. Password BGP tidak sama dengan PE.
-
-
-
+**Kesalahan Umum:** Loopback RR2 tidak diganti sehingga router-id ganda. `cluster-id` berbeda. `route-reflector-client` tertinggal pada satu PE. Password BGP tidak sama dengan PE.
