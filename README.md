@@ -2,21 +2,21 @@
 
 ## Daftar Isi
 
-- Bagian I — Fondasi: Bab 1-4
-- Bagian II — Desain Inti: Bab 5-15
-- Bagian III — Implementasi: Bab 16-18
-- Bagian IV — Operasi: Bab 19-21
+- Bagian I — Fondasi: Modul 1-4
+- Bagian II — Desain Inti: Modul 5-15
+- Bagian III — Implementasi: Modul 16-18
+- Bagian IV — Operasi: Modul 19-21
 - Appendix A-E, N (Golden Config RR), Studi Kasus A-D
 
 ## Bagian I — Fondasi
 
-### Bab 1: Ruang Lingkup
+### Modul 1: Ruang Lingkup
 
 **Prinsip:** Satu domain core, satu kebijakan routing, satu standar konfigurasi.
 **Ruang Lingkup:** Routing dan switching enterprise. Di luar lingkup: Segment Routing, EVPN penuh, otomasi.
 **Standar:** Hostname, Loopback0, deskripsi antarmuka, dan NTP wajib pada semua perangkat.
 
-### Bab 2: Topologi Referensi
+### Modul 2: Topologi Referensi
 
 | Peran | Jumlah | Fungsi |
 | --- | --- | --- |
@@ -27,7 +27,7 @@
 
 **Prinsip:** Kegagalan satu P, PE, atau RR tidak boleh menghentikan layanan. Redundansi harus diuji, bukan diasumsikan.
 
-### Bab 3: Hardening Dasar
+### Modul 3: Hardening Dasar
 
 **Prinsip:** Akses manajemen adalah permukaan serangan utama.
 **Konfigurasi Inti:**
@@ -45,9 +45,9 @@ login block-for <DETIK> attempts <JUMLAH> within <DETIK>
 ```
 
 **Verifikasi:** `show ip ssh` | `show access-lists` | `show login`
-**Risiko:** VTY tanpa ACL dan tanpa `reload in` menyebabkan lockout tanpa rollback.
+**Risiko:** VTY tanpa ACL dan tanpa `reload in` menyeModulkan lockout tanpa rollback.
 
-### Bab 4: Layer 2 dan STP
+### Modul 4: Layer 2 dan STP
 
 **Prinsip:** Loop Layer 2 menghentikan core lebih cepat daripada kegagalan routing.
 **Konfigurasi Inti:**
@@ -67,13 +67,13 @@ interface GigabitEthernet<SLOT>/<PORT>
 
 ## Bagian II — Desain Inti
 
-### Bab 5: IP Addressing
+### Modul 5: IP Addressing
 
 **Prinsip:** Loopback adalah identitas routing. Link adalah transit, bukan identitas.
 **Standar:** Loopback0 `/32` untuk router-id OSPF, BGP, dan LDP. Link point-to-point `/30` atau `/31`. Blok per site terdokumentasi, tidak tumpang tindih.
 **Verifikasi:** `show ip interface brief` | `show ip route connected`
 
-### Bab 6: OSPF
+### Modul 6: OSPF
 
 **Prinsip:** OSPF hanya untuk core. CE tidak masuk area 0 core.
 **Konfigurasi Inti:**
@@ -90,7 +90,7 @@ router ospf <PROCESS>
 **Verifikasi:** `show ip ospf neighbor` | `show ip ospf interface brief`
 **Risiko:** Router-id duplikat, autentikasi tidak cocok, `passive-interface` pada link core.
 
-### Bab 7: BGP dan Route Reflector
+### Modul 7: BGP dan Route Reflector
 
 **Prinsip:** Skalabilitas melalui hierarki. PE hanya peer ke RR, bukan full-mesh. RR hanya refleksi rute, tidak forwarding trafik pelanggan, tidak punya VRF pelanggan.
 **Kapan Dipakai:** Wajib jika PE > 2. Tanpa RR, PE harus full-mesh iBGP VPNv4. Dengan 2 RR, satu RR down tidak menghentikan refleksi.
@@ -222,7 +222,7 @@ show ip route <PE-LOOPBACK>
 **Verifikasi — PE (rute dari RR):** `show ip bgp vpnv4 all summary` | `show ip bgp vpnv4 vrf <VRF-NAMA> | include <PREFIX-CE>`
 **Risiko / Kesalahan Umum:** Tanpa `send-community extended`, RT tidak terkirim. Tanpa `update-source Loopback0`, sesi bergantung pada satu link. `cluster-id` beda di RR1/RR2. RR dikonfig `next-hop-self`. RR diberi VRF pelanggan. RR tidak masuk OSPF Area 0 atau LDP down sehingga Loopback PE tidak reachable. `route-reflector-client` hanya di `address-family ipv4` bukan `vpnv4`.
 
-### Bab 8: MPLS dan LDP
+### Modul 8: MPLS dan LDP
 
 **Prinsip:** Tanpa label, tidak ada forwarding MPLS.
 **Konfigurasi Inti:**
@@ -240,7 +240,7 @@ interface GigabitEthernet<SLOT>/<PORT>
 **Verifikasi:** `show mpls ldp neighbor` | `show mpls forwarding-table`
 **Risiko:** CEF nonaktif, MPLS hanya global, MTU tidak sama pada kedua ujung.
 
-### Bab 9: MPLS L3VPN dan VRF
+### Modul 9: MPLS L3VPN dan VRF
 
 **Prinsip:** Isolasi melalui VRF dan RT. Rute hanya masuk VRF jika RT cocok.
 **Konfigurasi Inti:**
@@ -258,15 +258,15 @@ interface GigabitEthernet<SLOT>/<PORT>
 **Verifikasi:** `show ip vrf` | `show ip route vrf <VRF-NAMA>` | `ping vrf <VRF-NAMA> <CE-LOOPBACK>`
 **Risiko:** IP diisi sebelum `ip vrf forwarding` hilang. RT tidak cocok membuat rute ada di BGP, tidak di VRF.
 
-### Bab 10: VRF Lite
+### Modul 10: VRF Lite
 
 **Prinsip:** Isolasi tanpa MPLS, pada satu perangkat atau antar perangkat campus.
 **Kapan Dipakai:** Campus multi-building tanpa core MPLS. Bukan pengganti MPLS L3VPN antar site.
-**Konfigurasi Inti:** Sama seperti Bab 9, tanpa MPLS dan BGP VPNv4. Routing antar VRF hanya melalui firewall atau route leaking yang disetujui.
+**Konfigurasi Inti:** Sama seperti Modul 9, tanpa MPLS dan BGP VPNv4. Routing antar VRF hanya melalui firewall atau route leaking yang disetujui.
 **Verifikasi:** `show ip vrf interfaces` | `show ip route vrf <VRF-NAMA>`
 **Risiko:** Leaking tanpa kontrol merusak isolasi.
 
-### Bab 11: QoS
+### Modul 11: QoS
 
 **Prinsip:** QoS adalah alokasi kelangkaan, bukan penambah bandwidth.
 **Standar:**
@@ -295,7 +295,7 @@ interface GigabitEthernet<SLOT>/<PORT>
 **Verifikasi:** `show policy-map interface GigabitEthernet<SLOT>/<PORT>`
 **Risiko:** Priority tanpa policing membuat voice menekan trafik lain. Marking tidak konsisten di ingress merusak klasifikasi di egress.
 
-### Bab 12: Keamanan Control Plane dan Data Plane
+### Modul 12: Keamanan Control Plane dan Data Plane
 
 **Prinsip:** Control plane dilindungi agar routing tetap hidup saat serangan atau storm.
 **Konfigurasi Inti:**
@@ -318,7 +318,7 @@ control-plane
 **Verifikasi:** `show policy-map control-plane` | `show access-lists`
 **Risiko:** CoPP terlalu ketat menjatuhkan adjacency. Terlalu longgar tidak melindungi CPU.
 
-### Bab 13: High Availability dan Fast Convergence
+### Modul 13: High Availability dan Fast Convergence
 
 **Prinsip:** Redundansi tanpa pengujian failover bukan redundansi.
 **Standar:** Dual P, dual PE per site kritis, dual RR, HSRP/VRRP pada gateway, BFD pada link core dan PE-CE kritis.
@@ -333,9 +333,9 @@ standby <GROUP> preempt
 ```
 
 **Verifikasi:** `show standby brief` | `show bfd neighbors` | `show ip ospf neighbor`
-**Risiko:** Timer BFD terlalu agresif pada link tidak stabil menyebabkan flapping.
+**Risiko:** Timer BFD terlalu agresif pada link tidak stabil menyeModulkan flapping.
 
-### Bab 14: NTP, DNS, DHCP, NAT
+### Modul 14: NTP, DNS, DHCP, NAT
 
 **Prinsip:** Log tanpa waktu sinkron tidak dapat dikorelasikan. NTP adalah prasyarat operasi, bukan pelengkap.
 **Konfigurasi Inti:**
@@ -351,7 +351,7 @@ ip domain-name <DOMAIN>
 **Verifikasi:** `show ntp status` | `show ntp associations`
 **Risiko:** Satu NTP server, NTP tanpa autentikasi, DHCP tanpa snooping di access.
 
-### Bab 15: Interkoneksi CE
+### Modul 15: Interkoneksi CE
 
 | Model | Kapan Dipakai | Protokol |
 | --- | --- | --- |
@@ -364,7 +364,7 @@ ip domain-name <DOMAIN>
 
 ## Bagian III — Implementasi
 
-### Bab 16: Implementasi P dan PE
+### Modul 16: Implementasi P dan PE
 
 **Prinsip:** P stabil dulu, baru PE bawa layanan. P tidak simpan rute VPN.
 **Urutan:** `reload in <MENIT>` > Loopback + OSPF > CEF + MPLS LDP > PE: VRF + BGP VPNv4 + PE-CE.
@@ -372,7 +372,7 @@ ip domain-name <DOMAIN>
 **Cek:** `show ip ospf neighbor` | `show mpls ldp neighbor` | `show mpls forwarding-table` | `show ip bgp vpnv4 all summary` | `ping vrf <VRF-NAMA> <CE-LOOPBACK>`
 **Jangan:** BGP sebelum LDP stabil. IP sebelum `ip vrf forwarding`. Tanpa `reload in`.
 
-### Bab 17: Implementasi RR dan CE
+### Modul 17: Implementasi RR dan CE
 
 **Prinsip:** RR tidak forward trafik pelanggan. CE tidak kenal core.
 **Urutan:** RR: OSPF + BGP VPNv4, hanya PE sebagai `route-reflector-client`. CE: peering langsung ke PE.
@@ -380,7 +380,7 @@ ip domain-name <DOMAIN>
 **Cek:** `show ip bgp vpnv4 all summary` | `show ip route vrf <VRF-NAMA>` | `ping vrf <VRF-NAMA> <CE-LOOPBACK>`
 **Jangan:** CE sebagai client RR. RR sebagai PE layanan. Peering via antarmuka fisik.
 
-### Bab 18: Validasi End-to-End dan Cutover
+### Modul 18: Validasi End-to-End dan Cutover
 
 **Prinsip:** Established bukan bukti forwarding. Rute bukan bukti label. Ping kecil bukan bukti MTU.
 **Urutan:** OSPF FULL > label terbentuk > rute VPNv4 > rute di VRF > ping VRF + MTU > failover P/PE/gateway.
@@ -389,21 +389,21 @@ ip domain-name <DOMAIN>
 
 ## Bagian IV — Operasi
 
-### Bab 19: Operasi Harian
+### Modul 19: Operasi Harian
 
 **Prinsip:** Cari penyimpangan, bukan hanya down. Tanpa baseline, anomali tidak terlihat.
 **Lakukan:** Bandingkan ke baseline: adjacency OSPF, neighbor LDP, sesi BGP, rute per VRF, CPU, memori.
 **Cek:** `show ip ospf neighbor` | `show mpls ldp neighbor` | `show ip bgp vpnv4 all summary` | `show cpu` | `show ntp status` | `show archive config`
 **Jangan:** Hanya cek up/down. Abaikan log dan arsip.
 
-### Bab 20: Troubleshooting
+### Modul 20: Troubleshooting
 
 **Prinsip:** Ikut lapisan. Jangan ubah BGP jika OSPF belum sehat.
 **Alur:** Fisik/L2 > OSPF > LDP/MPLS > BGP VPNv4 > VRF/RT > PE-CE > QoS/CoPP.
 **Cek:** `show ip ospf neighbor` | `show mpls ldp neighbor` | `show ip bgp vpnv4 all summary` | `show ip route vrf <VRF-NAMA>` | `ping vrf <VRF-NAMA> <CE-LOOPBACK>` | `show policy-map control-plane`
 **Jangan:** Ubah RT tanpa pahami kebijakan. Ping tanpa `vrf`. Abaikan CoPP.
 
-### Bab 21: Change, Backup, Lifecycle
+### Modul 21: Change, Backup, Lifecycle
 
 **Prinsip:** Tanpa titik kembali, perubahan tidak bisa dipertanggungjawabkan.
 **Prosedur:**
@@ -464,13 +464,13 @@ Verifikasi di Feature Navigator sebelum desain final. MPLS, QoS lanjutan, dan fi
 
 **Prinsip:** Satu baseline per peran. Semua perangkat mulai dari baseline yang sama, ditambah konfigurasi peran.
 
-**Baseline Umum — Semua Peran:** Gabungan dari Bab yang sudah ada, bukan konfig baru. Jangan salin ulang dari sini jika sudah terapkan Bab terkait.
+**Baseline Umum — Semua Peran:** Gabungan dari Modul yang sudah ada, bukan konfig baru. Jangan salin ulang dari sini jika sudah terapkan Modul terkait.
 
 | Komponen | Sumber Tunggal |
 | --- | --- |
-| Hardening, VTY, `enable secret` | Bab 3 |
-| NTP, DNS, domain | Bab 14 |
-| Archive, backup | Bab 21 |
+| Hardening, VTY, `enable secret` | Modul 3 |
+| NTP, DNS, domain | Modul 14 |
+| Archive, backup | Modul 21 |
 | Logging | Baris unik di bawah |
 
 ```
@@ -1036,7 +1036,7 @@ class-map [match-all | match-any] <CLASS-NAMA>
 | `match packet length` | `match packet length min <MIN> max <MAX>` | Klasifikasi berdasarkan panjang paket | `match packet length min 100 max 1500` | Jarang dipakai untuk voice / banking. |
 | `match ip rtp` | `match ip rtp <PORT-AWAL> <PORT-AKHIR>` | Klasifikasi trafik RTP voice | `match ip rtp 16384 32767` | Alternatif jika DSCP tidak ter-marking. |
 
-**Contoh Lengkap — Perbankan:** Definisi class-map: Lihat Bab 11. Nilai bandwidth perbankan: Lihat Appendix J.2. Kombinasi `match dscp` + `match access-group name <ACL-BANKING>` / `<ACL-ATM>` mengikuti tabel parameter di atas.
+**Contoh Lengkap — Perbankan:** Definisi class-map: Lihat Modul 11. Nilai bandwidth perbankan: Lihat Appendix J.2. Kombinasi `match dscp` + `match access-group name <ACL-BANKING>` / `<ACL-ATM>` mengikuti tabel parameter di atas.
 
 **Verifikasi:** `show class-map` | `show policy-map interface GigabitEthernet<SLOT>/<PORT>` | `show policy-map`
 **Kesalahan Umum:** Menggunakan `match-all` saat maksudnya `match-any` sehingga trafik tidak terklasifikasi. ACL salah sehingga class-map kosong. DSCP tidak konsisten di ingress dan egress.
@@ -1083,7 +1083,7 @@ class-map [match-all | match-any] <CLASS-NAMA>
 | CORP / GUEST | CS0 (0) / AF11 (10) | Default, sisa bandwidth |
 | Routing / Control | CS6 (48) / CS7 (56) | Tidak boleh di-drop oleh QoS data |
 
-**Pemetaan ke Class-map:** Definisi class-map: Lihat Bab 11. DSCP di tabel di atas dipetakan ke class VOICE (EF), BANKING (AF31), ATM (AF21), VIDEO (AF41).
+**Pemetaan ke Class-map:** Definisi class-map: Lihat Modul 11. DSCP di tabel di atas dipetakan ke class VOICE (EF), BANKING (AF31), ATM (AF21), VIDEO (AF41).
 
 **Verifikasi:** `show policy-map interface GigabitEthernet<SLOT>/<PORT>` | `show class-map`
 **Kesalahan Umum:** Marking EF untuk semua trafik sehingga priority tidak efektif. DSCP berbeda di ingress dan egress. AF33 dipakai untuk trafik kritis sehingga mudah di-drop saat congestion.
@@ -1092,7 +1092,7 @@ class-map [match-all | match-any] <CLASS-NAMA>
 
 **Prinsip:** RR adalah perangkat kontrol, bukan data plane pelanggan. Konfigurasi harus identik kecuali hostname, Loopback, dan IP link.
 
-**Konfig Lengkap:** Lihat Bab 7 — Konfigurasi Inti RR1. Jangan salin dari dua tempat. Di bawah ini hanya delta RR2 dan uji failover.
+**Konfig Lengkap:** Lihat Modul 7 — Konfigurasi Inti RR1. Jangan salin dari dua tempat. Di bawah ini hanya delta RR2 dan uji failover.
 
 **Delta RR2 — Yang Berbeda dari RR1:**
 
